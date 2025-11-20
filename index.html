@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Treino Intervalado</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+
+<!-- iPhone / iPad instalação -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Treino Intervalado">
+<link rel="apple-touch-icon" href="icon.png">
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #111;
+        color: white;
+        text-align: center;
+        padding: 20px;
+    }
+    h1 { color: #00eaff; }
+
+    .config-box {
+        background: #222;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+
+    input, button {
+        width: 100%;
+        padding: 14px;
+        font-size: 18px;
+        margin-top: 10px;
+        border-radius: 8px;
+        border: none;
+    }
+
+    #display {
+        font-size: 70px;
+        margin-top: 30px;
+    }
+
+    #status {
+        font-size: 26px;
+        margin-top: 10px;
+        color: #00ff99;
+    }
+
+    .btn-start {
+        background: #00eaff;
+        color: #000;
+        font-weight: bold;
+    }
+    .btn-stop {
+        background: #ff4444;
+        font-weight: bold;
+    }
+</style>
+</head>
+<body>
+
+<h1>Treino Intervalado</h1>
+
+<div class="config-box">
+    <label>Tempo 1 (minutos)</label>
+    <input id="t1" type="number" step="0.1" placeholder="1">
+
+    <label>Tempo 2 (minutos) (opcional)</label>
+    <input id="t2" type="number" step="0.1" placeholder="1">
+
+    <label>Repetições</label>
+    <input id="reps" type="number" placeholder="10">
+
+    <button class="btn-start" onclick="unlockAudio().then(startTraining)">INICIAR TREINO</button>
+    <button class="btn-stop" onclick="stopTraining()">PARAR</button>
+</div>
+
+<div id="status">Aguardando...</div>
+<div id="display">00:00</div>
+
+<audio id="beep" preload="auto">
+    <source src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" type="audio/ogg">
+</audio>
+
+<script>
+// -------------------------
+// VARIÁVEIS DO TREINO
+// -------------------------
+let interval = null;
+let currentTime = 0;
+let phase = 1;
+let currentRep = 1;
+let t1, t2, reps;
+let usingT2 = false;
+
+// -------------------------
+// FUNÇÕES DO PWA + ÁUDIO
+// -------------------------
+function unlockAudio() {
+    return new Promise(res => {
+        const beep = document.getElementById("beep");
+        beep.play().then(() => {
+            beep.pause();
+            beep.currentTime = 0;
+            res();
+        }).catch(() => res());
+    });
+}
+
+function vibrate() {
+    if (navigator.vibrate) navigator.vibrate([400, 200, 400]);
+}
+
+function playBeep() {
+    const beep = document.getElementById("beep");
+    beep.currentTime = 0;
+    beep.play();
+}
+
+function updateDisplay() {
+    let m = String(Math.floor(currentTime / 60)).padStart(2, "0");
+    let s = String(currentTime % 60).padStart(2, "0");
+    document.getElementById("display").innerText = `${m}:${s}`;
+}
+
+function stopTraining() {
+    clearInterval(interval);
+    document.getElementById("status").innerText = "Treino parado.";
+}
+
+// -------------------------
+// LÓGICA PRINCIPAL
+// -------------------------
+function startTraining() {
+    let t1m = parseFloat(document.getElementById("t1").value);
+    let t2m = parseFloat(document.getElementById("t2").value);
+    reps = parseInt(document.getElementById("reps").value);
+
+    if (!t1m || !reps) {
+        alert("Preencha Tempo 1 e Repetições");
+        return;
+    }
+
+    t1 = Math.round(t1m * 60);
+    t2 = Math.round(t2m * 60);
+    usingT2 = !isNaN(t2m) && t2m > 0;
+
+    currentRep = 1;
+    phase = 1;
+    currentTime = t1;
+
+    runTimer();
+}
+
+function runTimer() {
+    clearInterval(interval);
+
+    function tick() {
+        updateDisplay();
+
+        if (currentTime <= 0) {
+            playBeep();
+            vibrate();
+
+            if (phase === 1 && usingT2) {
+                phase = 2;
+                currentTime = t2;
+                document.getElementById("status").innerText = `Rep ${currentRep} – Tempo 2`;
+                return;
+            }
+
+            if (phase === 2 || !usingT2) {
+                currentRep++;
+                if (currentRep > reps) {
+                    clearInterval(interval);
+                    document.getElementById("status").innerText = "Treino Finalizado ✔️";
+                    document.getElementById("display").innerText = "00:00";
+                    playBeep();
+                    vibrate();
+                    return;
+                }
+                phase = 1;
+                currentTime = t1;
+                document.getElementById("status").innerText = `Rep ${currentRep} – Tempo 1`;
+                return;
+            }
+        }
+        currentTime--;
+    }
+
+    document.getElementById("status").innerText = "Rep 1 – Tempo 1";
+    interval = setInterval(tick, 1000);
+}
+
+// -------------------------
+// REGISTRO DO SERVICE WORKER
+// -------------------------
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("service-worker.js");
+}
+</script>
+
+</body>
+</html>
